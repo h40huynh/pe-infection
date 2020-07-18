@@ -12,6 +12,7 @@ BOOL ParsePEHeader(PBYTE pMapView, PPEFILE pPefile)
 
     pPefile->pNTHeaders = (PIMAGE_NT_HEADERS)((PBYTE)pPefile->pDOSHeader + pPefile->pDOSHeader->e_lfanew);
     pPefile->pFirstSectionHeader = (PIMAGE_SECTION_HEADER)((PBYTE)pPefile->pNTHeaders + sizeof(IMAGE_NT_HEADERS));
+    return 1;
 }
 
 DWORD Align(DWORD x, DWORD align)
