@@ -16,7 +16,7 @@ Clone project:
 git clone https://github.com/h40huynh/PE-infection-decryptor.git
 ```
 
-Chạy file setup.bat hoặc complie code trong thư mực **src/** (sử dụng mingw 32bit):
+Chạy file setup.bat hoặc complie code trong thư mục **src/** (sử dụng mingw 32bit):
 
 ```
 gcc src/*c -o bin/peinfection.exe
